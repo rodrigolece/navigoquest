@@ -4,13 +4,13 @@ import itertools
 import json
 import pathlib
 import pickle
-import re
 from abc import ABC
 from dataclasses import dataclass
 from typing import Any, Iterable, Protocol
 
 import numpy as np
 import scipy.sparse as sp
+import scipy.stats as st
 from numpy.typing import NDArray
 from scipy.spatial import distance_matrix
 from sklearn.neighbors import KDTree
@@ -26,6 +26,7 @@ EXPECTED_VISITING_ORDERS = {
     8: [0, 1, 2],
     11: [1, 0, 1, 2],
 }
+LEVELS_REVERSE_FLAGS = [6]  # TODO: check the other levels
 
 GroupKey = tuple[Any, ...]
 
@@ -73,28 +74,22 @@ class LevelGridBase(ABC):
     flags: NDArray[np.int32]
     flag_radius: int = DEFAULT_FLAG_RADIUS
 
-    def __init__(self, grid_filename: str | pathlib.Path) -> None:
+    def __init__(self, level: int) -> None:
         """
         Load the grid and flags.
 
         Parameters
         ----------
-        grid_filename : str | pathlib.Path
+        level : int
             Path to the level JSON file. The code expects the level to be in the filename.
         """
-        p = pathlib.Path(grid_filename)
+        p = pathlib.Path(__file__).parent / f"data/levels/level{level:02}.json"
 
         # Checks
         if not p.exists():
             raise FileNotFoundError(f"{p} does not exist")
-        if p.suffix != ".json":
-            raise ValueError(f"{p} is not a JSON file")
 
-        # Extract level from filename
-        level_match = re.search(r"level(\d+)", p.stem)
-        if not level_match:
-            raise ValueError(f"Cannot extract level number from filename: {p}")
-        self.level = int(level_match.group(1))
+        self.level = level
 
         # Initialize
         with p.open("r") as f:
@@ -106,7 +101,7 @@ class LevelGridBase(ABC):
             (self.grid_width, self.grid_length), order="F"
         )
         flags = np.array([(d["x"], d["y"]) for d in data["flags"]], dtype=np.int32)
-        if self.level in [6]:  # TODO: check the other levels
+        if self.level in LEVELS_REVERSE_FLAGS:
             flags = flags[::-1]
         self.flags = flags
 
@@ -245,8 +240,8 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
     _od_matrices: dict[GroupKey, AggregateODMatrix] | None = None
     _mobility_fields: dict[GroupKey, dict[tuple[int, int], NDArray[np.int32]]] | None = None
 
-    def __init__(self, grid_filename: str | pathlib.Path):
-        super().__init__(grid_filename=grid_filename)
+    def __init__(self, level: int):
+        super().__init__(level=level)
 
     def to_pickle(self, filename: str | pathlib.Path) -> None:
         if self._od_matrices is None or self._mobility_fields is None:
@@ -281,32 +276,40 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
 
         return None
 
-    def set_mobility_fields(
-        self,
-        window: int = 1,
-    ) -> None:
+    def transform_od_matrices_to_windowed(self, half_window: int = 5, scale: float = 2.0) -> None:
+        if self._od_matrices is None:
+            raise ValueError("call `set_od_matrices` first")
+
+        new_matrices = {}
+
+        if scale == np.inf:
+            weights = np.ones(2 * half_window + 1)
+        else:
+            weights = st.distributions.norm(0, scale=scale).pdf(
+                range(-half_window, half_window + 1)
+            )
+            weights /= weights.sum()
+
+        for key, agg in self._od_matrices.items():
+            age = key[0]  # TODO: only true if age is the first attribute, need to generalize
+
+            age_window = range(age - half_window, age + half_window + 1)
+            mat = sp.csr_matrix(agg.mat.shape)
+
+            for i, age in enumerate(age_window):
+                mat += weights[i] * self._od_matrices[key].norm_mat
+
+            new_matrices[key] = AggregateODMatrix(mat, 1)
+
+        self._od_matrices = new_matrices
+        return None
+
+    def set_mobility_fields(self) -> None:
         if self._od_matrices is None:
             raise ValueError("call `set_od_matrices` first")
         if self._mobility_fields is not None:
             raise ValueError("mobility fields already set")
         self._mobility_fields = {}
-
-        if window != 1:
-            # See _od_matrix_windowed in od_loader.py
-
-            # for key in self._od_matrices.keys():
-            # age_centre is in key
-            # ages = range(age_centre - window, age_centre + window + 1)
-            # weights = st.distributions.norm(age_centre, scale=scale).pdf(ages)
-            # weights /= weights.sum()
-
-            # N = self.grid_width * self.grid_length
-            # od_mat = sp.csr_matrix((N, N))
-
-            # for i, age in enumerate(ages):
-            #     od_mat += weights[i] * self._od_matrices[key].norm_mat  # need changed age in key
-
-            raise NotImplementedError("age windows not implemented yet")
 
         for key, agg in self._od_matrices.items():
             self._mobility_fields[key] = self.mobility_field(agg.mat)
@@ -320,12 +323,10 @@ class BoundaryEnvironment:
     rout: float
     scale: float
 
-    def __init__(self, filename: str | pathlib.Path, rin: float, rout: float, scale: float) -> None:
-        p = pathlib.Path(filename)
+    def __init__(self, level: int, rin: float, rout: float, scale: float) -> None:
+        p = pathlib.Path(__file__).parent / f"data/levels/level{level:02}_inner_bdry.npy"
         if not p.exists():
             raise FileNotFoundError(f"{p} does not exist")
-        if p.suffix != ".npy":  # TODO: change the format
-            raise ValueError
 
         inner_bdry = smooth_path(np.load(p))
         self.inner_bdry_kdtree = KDTree(inner_bdry)
