@@ -253,6 +253,13 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
         with open(filename, "wb") as f:
             pickle.dump(self, f)
 
+    @classmethod
+    def from_pickle(cls, filename: str | pathlib.Path) -> CohortEnvironment:
+        if isinstance(filename, str):
+            filename = pathlib.Path(filename)
+        with open(filename, "rb") as f:
+            return pickle.load(f)
+
     @property
     def od_matrices(self) -> dict[GroupKey, AggregateODMatrix]:
         if self._od_matrices is None:
@@ -339,6 +346,13 @@ class BoundaryEnvironment:
             filename = pathlib.Path(filename)
         with open(filename, "wb") as f:
             pickle.dump(self, f)
+
+    @classmethod
+    def from_pickle(cls, filename: str | pathlib.Path) -> BoundaryEnvironment:
+        if isinstance(filename, str):
+            filename = pathlib.Path(filename)
+        with open(filename, "rb") as f:
+            return pickle.load(f)
 
     def distances_to_boundary(self, path: Path) -> float:
         ds, _ = self.inner_bdry_kdtree.query(path.smooth_xy, k=1)  # second out arg is indices

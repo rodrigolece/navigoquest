@@ -43,29 +43,47 @@ class Path:
 class PathDataset:
     paths: list[Path]
     user_metadata: pd.DataFrame
-    metadata_cols: list[str]
 
     def __init__(
         self,
         paths: list[Path],
         user_metadata: pd.DataFrame,
-        metadata_cols: list[str],
     ):
         self.paths = paths
         self.user_metadata = user_metadata
-        self.metadata_cols = metadata_cols
 
     @classmethod
-    def from_csv(
+    def from_clinical_dataset(
+        cls,
+        clinical_dataframe: pd.DataFrame,
+        id_col: str = "id",
+        path_col: str = "trajectory_data",
+    ) -> PathDataset:
+        metadata_cols = [id_col, "level", "group", "age", "gender", "duration"]
+
+        paths = []
+
+        for _, row in clinical_dataframe.iterrows():
+            arr = row[path_col]
+            N = len(arr) // 2
+            arr = arr.reshape((N, 2), order="C")
+
+            metadata = {col: row[col] for col in metadata_cols}
+            paths.append(Path(arr, metadata))
+
+        return cls(paths, clinical_dataframe.drop(columns=[path_col]))
+
+    @classmethod
+    def from_level_csv(
         cls,
         paths_filename: str | pathlib.Path,
         metadata_filename: str | pathlib.Path,
-        metadata_cols: list[str],
+        metadata_keep_cols: list[str],
         paths_id_col: str = "user_id",
         metadata_id_col: str = "id",
         na_policy: str = "drop",
     ) -> PathDataset:
-        paths, user_ids = cls._paths_from_csv(paths_filename)
+        paths, user_ids = cls._paths_from_level_csv(paths_filename)
 
         user_metadata_df = pd.read_csv(metadata_filename)  # .rename(columns={"id": paths_id_col})
         merged_df = pd.merge(
@@ -93,43 +111,40 @@ class PathDataset:
             )
 
         for i, path in enumerate(paths):
-            subject_metadata = merged_df.iloc[i][metadata_cols].to_dict()
+            subject_metadata = merged_df.iloc[i][metadata_keep_cols].to_dict()
             path.metadata.update(subject_metadata)
 
-        return cls(paths, merged_df, metadata_cols)
+        return cls(paths, merged_df)
 
     @staticmethod
-    def _paths_from_csv(
+    def _paths_from_level_csv(
         filename: str | pathlib.Path,
         id_col: str = "user_id",
         path_col: str = "trajectory_data",
     ) -> tuple[list[Path], pd.Series]:
         if isinstance(filename, str):
             filename = pathlib.Path(filename)
-
-        assert filename.exists(), f"file {filename} does not exist"
+        if not filename.exists():
+            raise FileNotFoundError(f"File not found: {filename}")
 
         df = pd.read_csv(filename)
-        # TODO: this is where we should deal with instance_id and duplicated entries
 
         for col in [id_col, path_col]:
             assert col in df.columns, f"column {col} not found in {filename}"
-
-        # metadata_cols = [col for col in df.columns if col not in [id_col, path_col]]
 
         paths = []
         user_ids = []
 
         for i, row in df.iterrows():
-            path = path_json2array(row[path_col])
+            arr = path_json2array(row[path_col])
 
-            if path is None:
+            if arr is None:
                 print(f"corrupted data for entry: {i}")
                 continue
 
             user_ids.append(row[id_col])
             metadata = {col: row[col] for col in ["instance_id", "user_id", "duration"]}
-            paths.append(Path(path, metadata))
+            paths.append(Path(arr, metadata))
 
         return paths, pd.Series(user_ids).rename(id_col)
 
