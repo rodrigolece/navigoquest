@@ -28,7 +28,7 @@ def PathLengthMetric(path: Path) -> float:
 
 
 def AverageCurvatureMetric(path: Path) -> float:
-    diff = path.xy[1:] - path.xy[:-1]
+    diff = path.smooth_xy[1:] - path.smooth_xy[:-1]
     displacements = np.linalg.norm(diff, axis=1)
     length = displacements.sum()
 
