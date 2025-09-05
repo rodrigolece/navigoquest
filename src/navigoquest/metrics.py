@@ -3,12 +3,13 @@ from typing import Protocol
 import numpy as np
 
 from .environments import (
+    BoundaryEnvironment,
     CohortEnvironment,
     GridLike,
     SupportsBoundaryDistance,
     UserODMatrix,
 )
-from .paths import Path
+from .paths import Path, PathDataset
 
 
 class MetricProtocol(Protocol):
@@ -88,3 +89,27 @@ def VectorConformityMetric(path: Path, env: CohortEnvironment) -> float:
 
     # minus sign to reverse order
     return float(-out / T)
+
+
+def compute_standard_metrics(
+    dataset: PathDataset, cohort_env: CohortEnvironment, boundary_env: BoundaryEnvironment
+) -> list[dict]:
+    records: list[dict] = []
+
+    for path in dataset.paths:
+        mat = UserODMatrix.from_path(path, cohort_env)
+        records.append(
+            {
+                **path.metadata,
+                "voc": VisitingOrderMetric(path, cohort_env),
+                "path_length": PathLengthMetric(path),
+                "average_curvature": AverageCurvatureMetric(path),
+                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
+                "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
+                "conformity": ConformityMetric(mat, cohort_env),
+                "vector_conformity": VectorConformityMetric(path, cohort_env),
+            }
+        )
+
+    return records

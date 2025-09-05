@@ -16,6 +16,7 @@ from scipy.spatial import distance_matrix
 from sklearn.neighbors import KDTree
 
 from .paths import Path, PathDataset, smooth_path
+from .utils import glob_level_environments
 
 
 DEFAULT_FLAG_RADIUS = 3
@@ -295,7 +296,8 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
             weights = st.distributions.norm(0, scale=scale).pdf(
                 range(-half_window, half_window + 1)
             )
-            weights /= weights.sum()
+
+        weights /= weights.sum()
 
         for key, agg in self._od_matrices.items():
             age = key[0]  # TODO: only true if age is the first attribute, need to generalize
@@ -357,6 +359,47 @@ class BoundaryEnvironment:
     def distances_to_boundary(self, path: Path) -> float:
         ds, _ = self.inner_bdry_kdtree.query(path.smooth_xy, k=1)  # second out arg is indices
         return ds.flatten()  # KDTree returns a column vector
+
+
+class EnvironmentStore:
+    levels: list[int]
+    _cohort: dict[int, CohortEnvironment]
+    _boundary: dict[int, BoundaryEnvironment]
+
+    def __init__(
+        self,
+        cohort_dir: str | pathlib.Path,
+        boundary_dir: str | pathlib.Path,
+        levels: list[int],
+    ):
+        self.levels = sorted(levels)
+        self._cohort: dict[int, CohortEnvironment] = {}
+        self._boundary: dict[int, BoundaryEnvironment] = {}
+
+        # Find all available levels
+        available_cohort_levels = glob_level_environments(cohort_dir)
+        available_boundary_levels = glob_level_environments(boundary_dir)
+
+        # Check that all requested levels are available
+        missing_cohort = set(self.levels) - available_cohort_levels.keys()
+        missing_boundary = set(self.levels) - available_boundary_levels.keys()
+
+        if missing_cohort:
+            raise FileNotFoundError(
+                f"Missing cohort environments for levels: {sorted(missing_cohort)}"
+            )
+        if missing_boundary:
+            raise FileNotFoundError(
+                f"Missing boundary environments for levels: {sorted(missing_boundary)}"
+            )
+
+        # Load only the requested levels
+        for lvl in self.levels:
+            self._cohort[lvl] = CohortEnvironment.from_pickle(available_cohort_levels[lvl])
+            self._boundary[lvl] = BoundaryEnvironment.from_pickle(available_boundary_levels[lvl])
+
+    def get(self, level: int) -> tuple[CohortEnvironment, BoundaryEnvironment]:
+        return self._cohort[level], self._boundary[level]
 
 
 # def breakup_by_flags(path: Path, flags: NDArray[np.int32], R: float = 3) -> list[int]:
