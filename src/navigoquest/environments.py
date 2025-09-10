@@ -303,12 +303,15 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
 
         for key, agg in self._od_matrices.items():
             age = key[0]  # TODO: only true if age is the first attribute, need to generalize
+            if age < 24 or age > 80:
+                # NB: we have filtered ages outside the range [19, 99] so the window cannot be smaller than 24
+                continue
 
             age_window = range(age - half_window, age + half_window + 1)
             mat = sp.csr_matrix(agg.mat.shape)
 
-            for i, age in enumerate(age_window):
-                mat += weights[i] * self._od_matrices[key].norm_mat
+            for i, a in enumerate(age_window):
+                mat += weights[i] * self._od_matrices[(a, key[1])].norm_mat
 
             new_matrices[key] = AggregateODMatrix(mat, 1)
 
@@ -323,7 +326,7 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
         self._mobility_fields = {}
 
         for key, agg in self._od_matrices.items():
-            self._mobility_fields[key] = self.mobility_field(agg.mat)
+            self._mobility_fields[key] = self.mobility_field(agg.norm_mat)
 
         return None
 
