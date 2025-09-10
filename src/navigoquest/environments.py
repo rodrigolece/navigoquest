@@ -27,7 +27,9 @@ EXPECTED_VISITING_ORDERS = {
     8: [0, 1, 2],
     11: [1, 0, 1, 2],
 }
-LEVELS_REVERSE_FLAGS = [6]  # TODO: check the other levels
+LEVELS_REVERSE_FLAGS = [6, 8, 11]
+# NB: for levels 6, 8 and 11 I've tested the flags are in the reversed
+# order, but I don't know if this will always hold
 
 GroupKey = tuple[Any, ...]
 

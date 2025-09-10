@@ -1,6 +1,7 @@
 from typing import Protocol
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .environments import (
     BoundaryEnvironment,
@@ -23,8 +24,10 @@ def VisitingOrderMetric(path: Path, env: GridLike) -> int:
     return int(env.visiting_order_correctness(path))
 
 
-def PathLengthMetric(path: Path) -> float:
-    displacements = np.linalg.norm(path.xy[1:] - path.xy[:-1], axis=1)
+def PathLengthMetric(path: Path | NDArray) -> float:
+    # Adding support for arrays so the smooth path can be passed in BoundaryAffinityMetric
+    arr = path.xy if isinstance(path, Path) else path
+    displacements = np.linalg.norm(arr[1:] - arr[:-1], axis=1)
     return float(displacements.sum())
 
 
@@ -45,9 +48,11 @@ def AverageCurvatureMetric(path: Path) -> float:
 
 
 def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
-    length = PathLengthMetric(path)
+    length = PathLengthMetric(path.smooth_xy)
     ds = env.distances_to_boundary(path)
-    ds_rescaled = 2 * env.scale * (ds - (env.rout + env.rin) / 2) / (env.rout - env.rin)
+    ds_rescaled = -2 * env.scale * (ds - (env.rout + env.rin) / 2) / (env.rout - env.rin)
+    # NB: ds_rescaled is negative. This is in the original code but might be a mistake
+    # sigmoid: f(x) = 1 / (1 + exp(-x))
     return float(np.sum(1 / (1 + np.exp(-ds_rescaled))) / length)
 
 
@@ -92,7 +97,9 @@ def VectorConformityMetric(path: Path, env: CohortEnvironment) -> float:
 
 
 def compute_standard_metrics(
-    dataset: PathDataset, cohort_env: CohortEnvironment, boundary_env: BoundaryEnvironment
+    dataset: PathDataset,
+    cohort_env: CohortEnvironment,
+    boundary_env: BoundaryEnvironment,
 ) -> list[dict]:
     records: list[dict] = []
 
