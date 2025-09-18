@@ -1,7 +1,10 @@
+import os
+from multiprocessing import Pool
 from typing import Protocol
 
 import numpy as np
 from numpy.typing import NDArray
+from tqdm import tqdm
 
 from .environments import (
     BoundaryEnvironment,
@@ -118,5 +121,87 @@ def compute_standard_metrics(
                 "vector_conformity": VectorConformityMetric(path, cohort_env),
             }
         )
+
+    return records
+
+
+def _helper_standard_metrics_for_group(
+    args: tuple[list[Path], CohortEnvironment, BoundaryEnvironment],
+) -> list[dict]:
+    """
+    Helper function for a group of paths to process in parallel.
+    """
+    paths_group, cohort_env, boundary_env = args
+
+    records: list[dict] = []
+    for path in paths_group:
+        mat = UserODMatrix.from_path(path, cohort_env)
+        records.append(
+            {
+                **path.metadata,
+                "voc": VisitingOrderMetric(path, cohort_env),
+                "path_length": PathLengthMetric(path),
+                "average_curvature": AverageCurvatureMetric(path),
+                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
+                "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
+                "conformity": ConformityMetric(mat, cohort_env),
+                "vector_conformity": VectorConformityMetric(path, cohort_env),
+            }
+        )
+
+    return records
+
+
+def compute_standard_metrics_by_group(
+    dataset: PathDataset,
+    cohort_env: CohortEnvironment,
+    boundary_env: BoundaryEnvironment,
+    n_processes: int | None = None,
+) -> list[dict]:
+    """
+    Compute standard metrics for all paths in the dataset.
+
+    Parameters
+    ----------
+    dataset : PathDataset
+        The dataset containing paths to analyze
+    cohort_env : CohortEnvironment
+        The cohort environment for reference data
+    boundary_env : BoundaryEnvironment
+        The boundary environment for boundary-related metrics
+    n_processes : int | None, optional
+        Number of processes to use for parallel computation.
+        If None, uses os.cpu_count()
+
+    Returns
+    -------
+    list[dict]
+        List of dictionaries containing computed metrics for each path,
+        in the same order as the input dataset
+    """
+    if n_processes is None:
+        n_processes = os.cpu_count()
+
+    # Group paths by age and prepare chunks for parallel processing
+    groups = []
+
+    for _, (_, paths_iterator) in dataset.group_by("age", "gender"):
+        # Convert iterator to list to avoid serialization issues
+        paths_list = list(paths_iterator)
+        groups.append((paths_list, cohort_env, boundary_env))
+
+    with Pool(processes=n_processes) as pool:
+        group_records = list(
+            tqdm(
+                pool.imap(_helper_standard_metrics_for_group, groups),
+                total=len(groups),
+            )
+        )
+
+    records: list[dict] = []
+
+    for r in group_records:
+        records.extend(r)
 
     return records
