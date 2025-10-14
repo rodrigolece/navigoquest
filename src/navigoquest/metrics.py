@@ -85,7 +85,7 @@ def FrobeniusDeviationMetricSparse(mat: UserODMatrix, env: CohortEnvironment) ->
 def SupremumDeviationMetricSparse(mat: UserODMatrix, env: CohortEnvironment) -> float:
     key = mat.metadata["age"], mat.metadata["gender"]
     reference_mat = env.od_matrices[key].norm_mat
-    return return spnorm(reference_mat - mat.norm_mat, np.inf)
+    return spnorm(reference_mat - mat.norm_mat, np.inf)
 
 
 def ConformityMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
