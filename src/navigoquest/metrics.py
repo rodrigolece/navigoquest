@@ -79,7 +79,7 @@ def FrobeniusDeviationMetric(mat: UserODMatrix, env: CohortEnvironment, use_spar
     return MatrixDeviation(mat, env, 'fro', use_sparse)
 
 
-def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
+def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment, use_sparse: bool = True) -> float:
     return MatrixDeviation(mat, env, np.inf, use_sparse)
 
 
