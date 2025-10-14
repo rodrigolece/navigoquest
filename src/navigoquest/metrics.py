@@ -6,6 +6,8 @@ import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
 
+from scipy.sparse.linalg import norm as spnorm
+
 from .environments import (
     BoundaryEnvironment,
     CohortEnvironment,
@@ -71,6 +73,21 @@ def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
     return float(np.linalg.norm((reference_mat - mat.norm_mat).toarray(), np.inf))
 
 
+
+# Sparse norm, about 100-200 times faster
+def FrobeniusDeviationMetricSparse(mat: UserODMatrix, env: CohortEnvironment) -> float:
+    key = mat.metadata["age"], mat.metadata["gender"]
+    reference_mat = env.od_matrices[key].norm_mat
+    return spnorm(reference_mat - mat.norm_mat, 'fro')
+
+
+# Sparse norm, about 100-200 times faster
+def SupremumDeviationMetricSparse(mat: UserODMatrix, env: CohortEnvironment) -> float:
+    key = mat.metadata["age"], mat.metadata["gender"]
+    reference_mat = env.od_matrices[key].norm_mat
+    return return spnorm(reference_mat - mat.norm_mat, np.inf)
+
+
 def ConformityMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
     key = mat.metadata["age"], mat.metadata["gender"]
     reference_mat = env.od_matrices[key].norm_mat
@@ -103,24 +120,39 @@ def compute_standard_metrics(
     dataset: PathDataset,
     cohort_env: CohortEnvironment,
     boundary_env: BoundaryEnvironment,
+    use_sparse: bool = False,
 ) -> list[dict]:
     records: list[dict] = []
 
     for path in dataset.paths:
         mat = UserODMatrix.from_path(path, cohort_env)
-        records.append(
-            {
-                **path.metadata,
-                "voc": VisitingOrderMetric(path, cohort_env),
-                "path_length": PathLengthMetric(path),
-                "average_curvature": AverageCurvatureMetric(path),
-                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
-                "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
-                "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
-                "conformity": ConformityMetric(mat, cohort_env),
-                "vector_conformity": VectorConformityMetric(path, cohort_env),
-            }
-        )
+
+        if use_sparse:
+            item_output = {
+                    **path.metadata,
+                    "voc": VisitingOrderMetric(path, cohort_env),
+                    "path_length": PathLengthMetric(path),
+                    "average_curvature": AverageCurvatureMetric(path),
+                    "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                    "frobenius_deviation": FrobeniusDeviationMetricSparse(mat, cohort_env),
+                    "supremum_deviation": SupremumDeviationMetricSparse(mat, cohort_env),
+                    "conformity": ConformityMetric(mat, cohort_env),
+                    "vector_conformity": VectorConformityMetric(path, cohort_env),
+                }
+        else:
+            item_output = {
+                    **path.metadata,
+                    "voc": VisitingOrderMetric(path, cohort_env),
+                    "path_length": PathLengthMetric(path),
+                    "average_curvature": AverageCurvatureMetric(path),
+                    "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                    "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
+                    "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
+                    "conformity": ConformityMetric(mat, cohort_env),
+                    "vector_conformity": VectorConformityMetric(path, cohort_env),
+                }
+
+        records.append(item_output)
 
     return records
 
