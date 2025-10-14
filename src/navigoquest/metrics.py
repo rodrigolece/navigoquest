@@ -121,42 +121,17 @@ def compute_standard_metrics(
 
     for path in dataset.paths:
         mat = UserODMatrix.from_path(path, cohort_env)
-
-        if use_sparse:
-            FrobFunc = FrobeniusDeviationMetricSparse
-            SupFunc = SupremumDeviationMetricSparse
-        else:
-            FrobFunc = FrobeniusDeviationMetric
-            SupFunc = SupremumDeviationMetric
-
-
-        if use_sparse:
-            item_output = {
-                    **path.metadata,
-                    "voc": VisitingOrderMetric(path, cohort_env),
-                    "path_length": PathLengthMetric(path),
-                    "average_curvature": AverageCurvatureMetric(path),
-                    "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
-                    "frobenius_deviation": FrobeniusDeviationMetricSparse(mat, cohort_env),
-                    "supremum_deviation": SupremumDeviationMetricSparse(mat, cohort_env),
-                    "conformity": ConformityMetric(mat, cohort_env),
-                    "vector_conformity": VectorConformityMetric(path, cohort_env),
-                }
-        else:
-            item_output = {
-                    **path.metadata,
-                    "voc": VisitingOrderMetric(path, cohort_env),
-                    "path_length": PathLengthMetric(path),
-                    "average_curvature": AverageCurvatureMetric(path),
-                    "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
-                    "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
-                    "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
-                    "conformity": ConformityMetric(mat, cohort_env),
-                    "vector_conformity": VectorConformityMetric(path, cohort_env),
-                }
-
+        item_output = {
+                **path.metadata,
+                "voc": VisitingOrderMetric(path, cohort_env),
+                "path_length": PathLengthMetric(path),
+                "average_curvature": AverageCurvatureMetric(path),
+                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
+                "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
+                "conformity": ConformityMetric(mat, cohort_env),
+                "vector_conformity": VectorConformityMetric(path, cohort_env)}
         records.append(item_output)
-
     return records
 
 
