@@ -61,31 +61,26 @@ def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
     return float(np.sum(1 / (1 + np.exp(-ds_rescaled))) / length)
 
 
-def FrobeniusDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
+# For handling FrobeniusDeviationMetric and SupremumDeviationMetric
+def MatrixDeviation(mat: UserODMatrix, env: CohortEnvironment, ord: float | str, use_sparse: bool = True) -> float:
     key = mat.metadata["age"], mat.metadata["gender"]
     reference_mat = env.od_matrices[key].norm_mat
-    return float(np.linalg.norm((reference_mat - mat.norm_mat).toarray(), "fro"))
+    mat_diff = reference_mat - mat.norm_mat
+
+    # Matrix norm
+    if use_sparse:
+        output = spnorm(mat_diff, ord)
+    else:
+        output = float(np.linalg.norm(mat_diff.toarray(), ord))
+    return output
+
+
+def FrobeniusDeviationMetric(mat: UserODMatrix, env: CohortEnvironment, use_sparse: bool = True) -> float:
+    return MatrixDeviation(mat, env, 'fro', use_sparse)
 
 
 def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
-    key = mat.metadata["age"], mat.metadata["gender"]
-    reference_mat = env.od_matrices[key].norm_mat
-    return float(np.linalg.norm((reference_mat - mat.norm_mat).toarray(), np.inf))
-
-
-
-# Sparse norm, about 100-200 times faster
-def FrobeniusDeviationMetricSparse(mat: UserODMatrix, env: CohortEnvironment) -> float:
-    key = mat.metadata["age"], mat.metadata["gender"]
-    reference_mat = env.od_matrices[key].norm_mat
-    return spnorm(reference_mat - mat.norm_mat, 'fro')
-
-
-# Sparse norm, about 100-200 times faster
-def SupremumDeviationMetricSparse(mat: UserODMatrix, env: CohortEnvironment) -> float:
-    key = mat.metadata["age"], mat.metadata["gender"]
-    reference_mat = env.od_matrices[key].norm_mat
-    return spnorm(reference_mat - mat.norm_mat, np.inf)
+    return MatrixDeviation(mat, env, np.inf, use_sparse)
 
 
 def ConformityMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
@@ -126,6 +121,14 @@ def compute_standard_metrics(
 
     for path in dataset.paths:
         mat = UserODMatrix.from_path(path, cohort_env)
+
+        if use_sparse:
+            FrobFunc = FrobeniusDeviationMetricSparse
+            SupFunc = SupremumDeviationMetricSparse
+        else:
+            FrobFunc = FrobeniusDeviationMetric
+            SupFunc = SupremumDeviationMetric
+
 
         if use_sparse:
             item_output = {
