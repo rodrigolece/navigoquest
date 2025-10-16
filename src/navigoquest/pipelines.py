@@ -9,6 +9,11 @@ from .__init__ import EnvironmentStore, PathDataset, compute_standard_metrics, c
 from .__init__ import LEVELS, METADATA_COLS, AGE_RANGE, METADATA_FILENAME, PATHS_NORMATIVE_FILENAMES, PATHS_CLINICAL_FILENAME
 
 
+"""
+Pipeline functions that simplify bundled tasks
+"""
+
+
 def load_paths_normative(lvl, paths_dir, metadata_cols, age_range=None):
     """
     Load path data for normative data
@@ -57,6 +62,16 @@ def load_paths_clinical(lvl, paths_dir):
         return paths_split[0]
     else:
         return paths_split
+    
+
+def load_environment(dirs, levels):
+    """
+    Load environment store for given levels
+    """
+    print(f'Loading environment data...')
+    env_store = EnvironmentStore(dirs['env_cohort'], dirs['env_boundary'], levels)
+    print(f'done. \n')
+    return env_store
 
 
 def pipeline_compute_features(paths, env, task_list, early_stop=np.inf, use_sparse_norm=True):

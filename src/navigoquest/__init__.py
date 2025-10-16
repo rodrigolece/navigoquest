@@ -46,8 +46,8 @@ def standard_dirs():
 
     output = {'cwd': cwd,
               'paths': paths_dir,
-              'cohort_env': cohort_env_dir,
-              'boundary_env': boundary_env_dir,
+              'env_cohort': cohort_env_dir,
+              'env_boundary': boundary_env_dir,
               'output': output_dir}
     return output
 
