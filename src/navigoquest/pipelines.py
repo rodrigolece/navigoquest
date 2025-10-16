@@ -113,8 +113,8 @@ def pipeline_compute_features(paths, env, task_list, early_stop=np.inf, use_spar
         item_output = dict(**item_path.metadata)
         for key, func, arg_pre in task_list:
             tic = time.time()
-            arg = [arg_dict[item_argkey] for item_argkey in arg_pre]
-            item_output[key] = func(*arg)  # Main computation
+            args = [arg_dict[item_argkey] for item_argkey in arg_pre]
+            item_output[key] = func(*args)  # Main computation
             toc = time.time()
             time_counters[key].append(toc - tic)  # Computation time
         output.append(item_output)
