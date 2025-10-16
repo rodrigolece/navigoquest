@@ -4,6 +4,7 @@ from typing import Protocol
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy import sparse as sp
 from tqdm import tqdm
 
 from .environments import (
@@ -62,13 +63,15 @@ def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
 def FrobeniusDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
     key = mat.metadata["age"], mat.metadata["gender"]
     reference_mat = env.od_matrices[key].norm_mat
-    return float(np.linalg.norm((reference_mat - mat.norm_mat).toarray(), "fro"))
+    mat_diff = reference_mat - mat.norm_mat
+    return float(sp.linalg.norm(mat_diff, "fro"))
 
 
 def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
     key = mat.metadata["age"], mat.metadata["gender"]
     reference_mat = env.od_matrices[key].norm_mat
-    return float(np.linalg.norm((reference_mat - mat.norm_mat).toarray(), np.inf))
+    mat_diff = reference_mat - mat.norm_mat
+    return float(sp.linalg.norm((mat_diff), np.inf))
 
 
 def ConformityMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
