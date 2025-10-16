@@ -6,7 +6,7 @@ import time
 from .environments import EnvironmentStore, UserODMatrix
 from .metrics import VisitingOrderMetric, PathLengthMetric, AverageCurvatureMetric, BoundaryAffinityMetric, FrobeniusDeviationMetric, SupremumDeviationMetric, ConformityMetric, VectorConformityMetric
 from .__init__ import EnvironmentStore, PathDataset, compute_standard_metrics, compute_standard_metrics_by_group
-from .__init__ import LEVELS, METADATA_COLS, AGE_RANGE, METADATA_FILENAME, PATHS_NORMATIVE_FILENAMES, PATHS_CLINICAL_FILENAME
+from .utils_paper import LEVELS, METADATA_COLS, AGE_RANGE, METADATA_FILENAME, PATHS_NORMATIVE_FILENAMES, PATHS_CLINICAL_FILENAME
 
 
 """
@@ -14,19 +14,20 @@ Pipeline functions that simplify bundled tasks
 """
 
 
-def load_paths_normative(lvl, paths_dir, metadata_cols, age_range=None):
+def load_paths_normative(lvl, dirs, age_range=None, metadata_cols=METADATA_COLS, filenames_normative=PATHS_NORMATIVE_FILENAMES, metadata_filename=METADATA_FILENAME):
     """
     Load path data for normative data
     Currently retrieves the list of paths
     """
     if age_range is None:
         age_range = {'min': -np.inf, 'max': np.inf}
+    paths_dir = dirs['paths']
 
     # Load path data
     print(f'Loading path data...')
     dataset = PathDataset.from_level_csv(
-        paths_filename=paths_dir / PATHS_NORMATIVE_FILENAMES[lvl],
-        metadata_filename=paths_dir / METADATA_FILENAME,
+        paths_filename=paths_dir / filenames_normative[lvl],
+        metadata_filename=paths_dir / metadata_filename,
         metadata_keep_cols=metadata_cols,)
     
     # Filter by age
@@ -40,7 +41,7 @@ def load_paths_normative(lvl, paths_dir, metadata_cols, age_range=None):
     return dataset.paths
 
 
-def load_paths_clinical(lvl, paths_dir):
+def load_paths_clinical(lvl, dirs, filename=PATHS_CLINICAL_FILENAME):
     if lvl == 'all':
         levels = LEVELS
     elif type(lvl) == int:
@@ -48,9 +49,10 @@ def load_paths_clinical(lvl, paths_dir):
     else:
         assert type(lvl) == list
         levels = lvl
+    paths_dir = dirs['paths']
 
     # Load paths
-    df_all = pd.read_feather(paths_dir / PATHS_CLINICAL_FILENAME)
+    df_all = pd.read_feather(paths_dir / filename)
     paths_split = []
     for lvl in levels:
         grp_lvl = df_all.loc[df_all["level"] == lvl]
@@ -64,7 +66,7 @@ def load_paths_clinical(lvl, paths_dir):
         return paths_split
     
 
-def load_environment(dirs, levels):
+def load_environment(dirs, levels=LEVELS):
     """
     Load environment store for given levels
     """
