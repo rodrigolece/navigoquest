@@ -208,3 +208,32 @@ def compute_standard_metrics_by_group(
         records.extend(r)
 
     return records
+
+
+dict_metric_function = {
+    "voc": VisitingOrderMetric,
+    "path_length": PathLengthMetric,
+    "average_curvature": AverageCurvatureMetric,
+    "boundary_affinity": BoundaryAffinityMetric,
+    "frobenius_deviation": FrobeniusDeviationMetric,
+    "supremum_deviation": SupremumDeviationMetric,
+    "conformity": ConformityMetric,
+    "vector_conformity": VectorConformityMetric,
+}
+
+dict_metric_argname = {
+    "voc": ("path", "env_cohort"),
+    "path_length": ("path",),
+    "average_curvature": ("path",),
+    "boundary_affinity": ("path", "env_boundary"),
+    "frobenius_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
+    "supremum_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
+    "conformity": ("odmat", "env_cohort"),
+    "vector_conformity": ("path", "env_cohort"),
+}
+
+
+def format_metric_task_data(task_list):
+    functions = [dict_metric_function[task] for task in task_list]
+    argnames = [dict_metric_argname[task] for task in task_list]
+    return list(zip(task_list, functions, argnames))
