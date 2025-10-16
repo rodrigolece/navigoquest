@@ -1,55 +1,68 @@
-import numpy as np
-import pandas as pd
-from tqdm.notebook import tqdm
-import time
-
-from .environments import EnvironmentStore, UserODMatrix
-from .metrics import VisitingOrderMetric, PathLengthMetric, AverageCurvatureMetric, BoundaryAffinityMetric, FrobeniusDeviationMetric, SupremumDeviationMetric, ConformityMetric, VectorConformityMetric
-from .__init__ import EnvironmentStore, PathDataset, compute_standard_metrics, compute_standard_metrics_by_group
-from .utils_paper import LEVELS, METADATA_COLS, AGE_RANGE, METADATA_FILENAME, PATHS_NORMATIVE_FILENAMES, PATHS_CLINICAL_FILENAME
-
-
 """
 Pipeline functions that simplify bundled tasks
 """
 
+import time
 
-def load_paths_normative(lvl, dirs, age_range=None, metadata_cols=METADATA_COLS, filenames_normative=PATHS_NORMATIVE_FILENAMES, metadata_filename=METADATA_FILENAME):
+import numpy as np
+import pandas as pd
+from tqdm.notebook import tqdm
+
+from .environments import EnvironmentStore, UserODMatrix
+from .paths import PathDataset
+from .utils_paper import (
+    LEVELS,
+    METADATA_COLS,
+    METADATA_FILENAME,
+    PATHS_CLINICAL_FILENAME,
+    PATHS_NORMATIVE_FILENAMES,
+)
+
+
+def load_paths_normative(
+    lvl,
+    dirs,
+    age_range=None,
+    metadata_cols=METADATA_COLS,
+    filenames_normative=PATHS_NORMATIVE_FILENAMES,
+    metadata_filename=METADATA_FILENAME,
+):
     """
     Load path data for normative data
     Currently retrieves the list of paths
     """
     if age_range is None:
-        age_range = {'min': -np.inf, 'max': np.inf}
-    paths_dir = dirs['paths']
+        age_range = {"min": -np.inf, "max": np.inf}
+    paths_dir = dirs["paths"]
 
     # Load path data
-    print(f'Loading path data...')
+    print("Loading path data...")
     dataset = PathDataset.from_level_csv(
         paths_filename=paths_dir / filenames_normative[lvl],
         metadata_filename=paths_dir / metadata_filename,
-        metadata_keep_cols=metadata_cols,)
-    
+        metadata_keep_cols=metadata_cols,
+    )
+
     # Filter by age
     df_metadata = dataset.user_metadata
-    idx_drop = (df_metadata.age < age_range['min']) | (df_metadata.age > age_range['max'])
+    idx_drop = (df_metadata.age < age_range["min"]) | (df_metadata.age > age_range["max"])
     idx_include = ~idx_drop  # Indices to use
     dataset.user_metadata = df_metadata.loc[idx_include].reset_index(drop=True)
     filtered_paths = [dataset.paths[i] for i in df_metadata.loc[idx_include].index]
-    dataset.paths = filtered_paths # Only use paths in the index range
-    print(f'done. \n')
+    dataset.paths = filtered_paths  # Only use paths in the index range
+    print("done. \n")
     return dataset.paths
 
 
 def load_paths_clinical(lvl, dirs, filename=PATHS_CLINICAL_FILENAME):
-    if lvl == 'all':
+    if lvl == "all":
         levels = LEVELS
-    elif type(lvl) == int:
+    elif isinstance(lvl, int):
         levels = [lvl]
     else:
-        assert type(lvl) == list
+        assert isinstance(lvl, list)
         levels = lvl
-    paths_dir = dirs['paths']
+    paths_dir = dirs["paths"]
 
     # Load paths
     df_all = pd.read_feather(paths_dir / filename)
@@ -59,20 +72,20 @@ def load_paths_clinical(lvl, dirs, filename=PATHS_CLINICAL_FILENAME):
         dataset = PathDataset.from_clinical_dataset(grp_lvl, path_col="trajectory_data")
         paths_split.append(dataset.paths)
 
-    if type(lvl) == int:
+    if isinstance(lvl, int):
         assert len(paths_split) == 1
         return paths_split[0]
     else:
         return paths_split
-    
+
 
 def load_environment(dirs, levels=LEVELS):
     """
     Load environment store for given levels
     """
-    print(f'Loading environment data...')
-    env_store = EnvironmentStore(dirs['env_cohort'], dirs['env_boundary'], levels)
-    print(f'done. \n')
+    print("Loading environment data...")
+    env_store = EnvironmentStore(dirs["env_cohort"], dirs["env_boundary"], levels)
+    print("done. \n")
     return env_store
 
 
@@ -82,15 +95,19 @@ def pipeline_compute_features(paths, env, task_list, early_stop=np.inf, use_spar
     """
     key_list = [item[0] for item in task_list]
     cohort_env, boundary_env = env
-    time_counters = {key: [] for key in key_list} # Computation time counter (unnecessary)
+    time_counters = {key: [] for key in key_list}  # Computation time counter (unnecessary)
     output = []
     early_stop_counter = 0
     for item_path in tqdm(paths):
-        item_odmat = UserODMatrix.from_path(item_path, cohort_env) # OD Mat for particular path
+        item_odmat = UserODMatrix.from_path(item_path, cohort_env)  # OD Mat for particular path
         # For replacing placeholders in task_list
-        arg_dict = {'path': item_path, 'odmat': item_odmat,
-                    'env_cohort': cohort_env, 'env_boundary': boundary_env,
-                    'use_sparse_norm': use_sparse_norm}
+        arg_dict = {
+            "path": item_path,
+            "odmat": item_odmat,
+            "env_cohort": cohort_env,
+            "env_boundary": boundary_env,
+            "use_sparse_norm": use_sparse_norm,
+        }
 
         # Main computation: Metrics per path
         item_output = dict(**item_path.metadata)
@@ -99,7 +116,7 @@ def pipeline_compute_features(paths, env, task_list, early_stop=np.inf, use_spar
             arg = [arg_dict[item_argkey] for item_argkey in arg_pre]
             item_output[key] = func(*arg)  # Main computation
             toc = time.time()
-            time_counters[key].append(toc-tic)  # Computation time
+            time_counters[key].append(toc - tic)  # Computation time
         output.append(item_output)
 
         # Early stop (optional)
@@ -107,4 +124,3 @@ def pipeline_compute_features(paths, env, task_list, early_stop=np.inf, use_spar
         if early_stop_counter > early_stop:
             break
     return output
-

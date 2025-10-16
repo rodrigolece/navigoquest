@@ -1,10 +1,11 @@
 import os
 from multiprocessing import Pool
-from typing import Protocol
+from typing import Literal, Protocol
+
 import numpy as np
 from numpy.typing import NDArray
-from tqdm import tqdm
 from scipy.sparse.linalg import norm as spnorm
+from tqdm import tqdm
 
 from .environments import (
     BoundaryEnvironment,
@@ -14,6 +15,9 @@ from .environments import (
     UserODMatrix,
 )
 from .paths import Path, PathDataset
+
+
+NormArgumentT = Literal["fro", "nuc"] | float | None
 
 
 class MetricProtocol(Protocol):
@@ -60,7 +64,9 @@ def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
 
 
 # For handling FrobeniusDeviationMetric and SupremumDeviationMetric
-def MatrixDeviation(mat: UserODMatrix, env: CohortEnvironment, ord: float | str, use_sparse: bool = True) -> float:
+def _helper_matrix_diff(
+    mat: UserODMatrix, env: CohortEnvironment, ord: NormArgumentT, use_sparse: bool = True
+) -> float:
     key = mat.metadata["age"], mat.metadata["gender"]
     reference_mat = env.od_matrices[key].norm_mat
     mat_diff = reference_mat - mat.norm_mat
@@ -73,12 +79,16 @@ def MatrixDeviation(mat: UserODMatrix, env: CohortEnvironment, ord: float | str,
     return output
 
 
-def FrobeniusDeviationMetric(mat: UserODMatrix, env: CohortEnvironment, use_sparse: bool = True) -> float:
-    return MatrixDeviation(mat, env, 'fro', use_sparse)
+def FrobeniusDeviationMetric(
+    mat: UserODMatrix, env: CohortEnvironment, use_sparse: bool = True
+) -> float:
+    return _helper_matrix_diff(mat, env, "fro", use_sparse)
 
 
-def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment, use_sparse: bool = True) -> float:
-    return MatrixDeviation(mat, env, np.inf, use_sparse)
+def SupremumDeviationMetric(
+    mat: UserODMatrix, env: CohortEnvironment, use_sparse: bool = True
+) -> float:
+    return _helper_matrix_diff(mat, env, np.inf, use_sparse)
 
 
 def ConformityMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
@@ -120,15 +130,16 @@ def compute_standard_metrics(
     for path in dataset.paths:
         mat = UserODMatrix.from_path(path, cohort_env)
         item_output = {
-                **path.metadata,
-                "voc": VisitingOrderMetric(path, cohort_env),
-                "path_length": PathLengthMetric(path),
-                "average_curvature": AverageCurvatureMetric(path),
-                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
-                "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
-                "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
-                "conformity": ConformityMetric(mat, cohort_env),
-                "vector_conformity": VectorConformityMetric(path, cohort_env)}
+            **path.metadata,
+            "voc": VisitingOrderMetric(path, cohort_env),
+            "path_length": PathLengthMetric(path),
+            "average_curvature": AverageCurvatureMetric(path),
+            "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+            "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
+            "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
+            "conformity": ConformityMetric(mat, cohort_env),
+            "vector_conformity": VectorConformityMetric(path, cohort_env),
+        }
         records.append(item_output)
     return records
 
@@ -215,28 +226,30 @@ def compute_standard_metrics_by_group(
     return records
 
 
-dict_metric_function = {'voc': VisitingOrderMetric,
-                        'path_length': PathLengthMetric,
-                        'average_curvature': AverageCurvatureMetric,
-                        'boundary_affinity': BoundaryAffinityMetric,
-                        'frobenius_deviation': FrobeniusDeviationMetric,
-                        'supremum_deviation': SupremumDeviationMetric,
-                        'conformity': ConformityMetric,
-                        'vector_conformity': VectorConformityMetric}
+dict_metric_function = {
+    "voc": VisitingOrderMetric,
+    "path_length": PathLengthMetric,
+    "average_curvature": AverageCurvatureMetric,
+    "boundary_affinity": BoundaryAffinityMetric,
+    "frobenius_deviation": FrobeniusDeviationMetric,
+    "supremum_deviation": SupremumDeviationMetric,
+    "conformity": ConformityMetric,
+    "vector_conformity": VectorConformityMetric,
+}
 
-dict_metric_argname = {'voc': ('path', 'env_cohort'),
-                        'path_length': ('path',),
-                        'average_curvature': ('path',),
-                        'boundary_affinity': ('path', 'env_boundary'),
-                        'frobenius_deviation': ('odmat', 'env_cohort', 'use_sparse_norm'),
-                        'supremum_deviation': ('odmat', 'env_cohort', 'use_sparse_norm'),
-                        'conformity': ('odmat', 'env_cohort'),
-                        'vector_conformity': ('path', 'env_cohort')}
+dict_metric_argname = {
+    "voc": ("path", "env_cohort"),
+    "path_length": ("path",),
+    "average_curvature": ("path",),
+    "boundary_affinity": ("path", "env_boundary"),
+    "frobenius_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
+    "supremum_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
+    "conformity": ("odmat", "env_cohort"),
+    "vector_conformity": ("path", "env_cohort"),
+}
 
 
 def format_metric_task_data(task_list):
     functions = [dict_metric_function[task] for task in task_list]
     argnames = [dict_metric_argname[task] for task in task_list]
     return list(zip(task_list, functions, argnames))
-
-

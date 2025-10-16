@@ -15,13 +15,14 @@ PATHS_NORMATIVE_FILENAMES = {lvl: f"level{lvl:02}_gb_1998_first-attempts.csv" fo
 PATHS_CLINICAL_FILENAME = "clinical_paths.feather"
 
 METADATA_COLS = ["age", "gender"]
-AGE_RANGE = {'min': 24, 'max': 80}
+AGE_RANGE = {"min": 24, "max": 80}
 BOUNDARY_PARAMs = {
     1: {"rin": 1, "rout": 2},
     2: {"rin": 1, "rout": 2},
     6: {"rin": 1.5, "rout": 4},
     8: {"rin": 1.5, "rout": 4},
-    11: {"rin": 1, "rout": 2}}
+    11: {"rin": 1, "rout": 2},
+}
 ODMAT_WINDOW_SIZE = 5
 ODMAT_WEIGHT_SCALE = 2.0
 
@@ -34,10 +35,11 @@ def standard_dirs():
     boundary_env_dir = cwd / FOLDER_NAME_BOUNDARY_ENVS
     output_dir = cwd / FOLDER_NAME_METRICS
 
-    output = {'cwd': cwd,
-              'paths': paths_dir,
-              'env_cohort': cohort_env_dir,
-              'env_boundary': boundary_env_dir,
-              'output': output_dir}
+    output = {
+        "cwd": cwd,
+        "paths": paths_dir,
+        "env_cohort": cohort_env_dir,
+        "env_boundary": boundary_env_dir,
+        "output": output_dir,
+    }
     return output
-
