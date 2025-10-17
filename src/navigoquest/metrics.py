@@ -3,6 +3,7 @@ from multiprocessing import Pool
 from typing import Protocol
 
 import numpy as np
+import pandas as pd
 from numpy.typing import NDArray
 from scipy import sparse as sp
 from tqdm import tqdm
@@ -107,6 +108,22 @@ def compute_standard_metrics(
     cohort_env: CohortEnvironment,
     boundary_env: BoundaryEnvironment,
 ) -> list[dict]:
+    """Compute all the standard metrics for paths in the dataset.
+
+    Parameters
+    ----------
+    dataset : PathDataset
+        The dataset containing paths to analyze
+    cohort_env : CohortEnvironment
+        The cohort environment for reference data
+    boundary_env : BoundaryEnvironment
+        The boundary environment for boundary-related metrics
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing computed metrics for each path.
+    """
     records: list[dict] = []
 
     for path in dataset.paths:
@@ -125,7 +142,7 @@ def compute_standard_metrics(
             }
         )
 
-    return records
+    return pd.DataFrame.from_records(records)
 
 
 def _helper_standard_metrics_for_group(
@@ -162,8 +179,7 @@ def compute_standard_metrics_by_group(
     boundary_env: BoundaryEnvironment,
     n_processes: int | None = None,
 ) -> list[dict]:
-    """
-    Compute standard metrics for all paths in the dataset.
+    """Compute in parallel all the standard metrics for paths in the dataset.
 
     Parameters
     ----------
@@ -179,9 +195,8 @@ def compute_standard_metrics_by_group(
 
     Returns
     -------
-    list[dict]
-        List of dictionaries containing computed metrics for each path,
-        in the same order as the input dataset
+    pd.DataFrame
+        DataFrame containing computed metrics for each path.
     """
     if n_processes is None:
         n_processes = os.cpu_count()
@@ -207,7 +222,7 @@ def compute_standard_metrics_by_group(
     for r in group_records:
         records.extend(r)
 
-    return records
+    return pd.DataFrame.from_records(records)
 
 
 dict_metric_function = {

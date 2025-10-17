@@ -10,6 +10,8 @@ import pandas as pd
 from numpy.typing import NDArray
 from scipy.ndimage import gaussian_filter1d
 
+from .config import ODMATS_AGE_RANGE
+
 
 def smooth_path(
     arr: NDArray[np.int32], spline_res: int = 3, bandwidth: float = 1.67
@@ -78,7 +80,7 @@ class PathDataset:
         cls,
         paths_filename: str | pathlib.Path,
         metadata_filename: str | pathlib.Path,
-        metadata_keep_cols: list[str],
+        metadata_keep_cols: list[str] = ["age", "gender"],
         paths_id_col: str = "user_id",
         metadata_id_col: str = "id",
         na_policy: str = "drop",
@@ -184,6 +186,27 @@ class PathDataset:
             N = group_sizes[group_key]
             paths = (self.paths[i] for i in group_df.index)
             yield group_key, (N, paths)
+
+    def align_to_odmats_age_range(self, age_range: tuple[int, int] = ODMATS_AGE_RANGE) -> None:
+        """Filter out paths with ages outside the range used for OD Matrices.
+
+        Parameters
+        ----------
+        age_range : tuple[int, int], optional
+            The age range to filter the paths by. The default is (24, 80).
+
+        Notes
+        -----
+        This method modifies the dataset in place.
+        """
+        df = self.user_metadata
+        idx_drop = (df.age < age_range[0]) | (df.age > age_range[1])
+        print(f"dropping {idx_drop.sum():,} paths outside age range {age_range}")
+
+        self.user_metadata = df.loc[~idx_drop].reset_index(drop=True)
+
+        filtered_paths = [self.paths[i] for i in df.loc[~idx_drop].index]
+        self.paths = filtered_paths
 
 
 def path_json2array(json_str: str) -> NDArray[np.int32] | None:
