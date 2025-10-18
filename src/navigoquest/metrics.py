@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 from scipy import sparse as sp
 from tqdm import tqdm
 
+from .config import BOUNDARY_RADII
 from .environments import (
     AggregateODMatrix,
     BoundaryEnvironment,
@@ -178,24 +179,38 @@ def compute_standard_metrics(
     return pd.DataFrame.from_records(records)
 
 
-def _helper_standard_metrics_for_group(
-    args: tuple,
-) -> list[dict]:
+# Module-level worker state for multiprocessing
+_worker_level_env: MinLevelEnvironment
+_worker_boundary_env: BoundaryEnvironment
+
+
+def _init_metrics_worker(level: int) -> None:
+    """Initialize worker process with environments."""
+    global _worker_level_env, _worker_boundary_env
+    _worker_level_env = MinLevelEnvironment(level=level)
+    _worker_boundary_env = BoundaryEnvironment(level=level, **BOUNDARY_RADII[level])
+
+
+def _helper_standard_metrics_for_group(args: tuple) -> list[dict]:
+    """Helper function to process a group of paths using the worker's environments.
+
+    This function is called by worker processes and uses the module-level
+    environments initialized by _init_metrics_worker.
+
     """
-    Helper function for a group of paths to process in parallel.
-    """
-    paths_group, level_env, boundary_env, reference_mat, reference_field = args
+    paths_group, reference_mat, reference_field = args
 
     records: list[dict] = []
+
     for path in paths_group:
-        mat = UserODMatrix.from_path(path, level_env)
+        mat = UserODMatrix.from_path(path, _worker_level_env)
         records.append(
             {
                 **path.metadata,
-                "voc": VisitingOrderMetric(path, level_env),
+                "voc": VisitingOrderMetric(path, _worker_level_env),
                 "path_length": PathLengthMetric(path),
                 "average_curvature": AverageCurvatureMetric(path),
-                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                "boundary_affinity": BoundaryAffinityMetric(path, _worker_boundary_env),
                 "frobenius_deviation": FrobeniusDeviationMetric(mat, reference_mat=reference_mat),
                 "supremum_deviation": SupremumDeviationMetric(mat, reference_mat=reference_mat),
                 "conformity": ConformityMetric(mat, reference_mat=reference_mat),
@@ -209,8 +224,6 @@ def _helper_standard_metrics_for_group(
 def compute_standard_metrics_by_group(
     dataset: PathDataset,
     cohort_env: CohortEnvironment,
-    boundary_env: BoundaryEnvironment,
-    level_env: MinLevelEnvironment,
     n_processes: int | None = None,
 ) -> pd.DataFrame:
     """Compute in parallel all the standard metrics for paths in the dataset.
@@ -221,8 +234,6 @@ def compute_standard_metrics_by_group(
         The dataset containing paths to analyze
     cohort_env : CohortEnvironment
         The cohort environment for reference data
-    boundary_env : BoundaryEnvironment
-        The boundary environment for boundary-related metrics
     n_processes : int | None, optional
         Number of processes to use for parallel computation.
         If None, uses os.cpu_count()
@@ -235,17 +246,20 @@ def compute_standard_metrics_by_group(
     if n_processes is None:
         n_processes = os.cpu_count()
 
-    # Group paths by age and prepare chunks for parallel processing
     group_args = []
 
     for key, (_, paths_iterator) in dataset.group_by("age", "gender"):
-        # Convert iterator to list to avoid serialization issues
-        paths_list = list(paths_iterator)
+        paths_list = list(paths_iterator)  # list to avoid serialization issues
         reference_mat = cohort_env.od_matrices[key]
         reference_field = cohort_env.mobility_fields[key]
-        group_args.append((paths_list, level_env, boundary_env, reference_mat, reference_field))
+        group_args.append((paths_list, reference_mat, reference_field))
 
-    with Pool(processes=n_processes) as pool:
+    # calling Pool with initializer to set up environments once per worker
+    with Pool(
+        processes=n_processes,
+        initializer=_init_metrics_worker,
+        initargs=[cohort_env.level],
+    ) as pool:
         group_records = list(
             tqdm(
                 pool.imap(_helper_standard_metrics_for_group, group_args),
@@ -253,10 +267,7 @@ def compute_standard_metrics_by_group(
             )
         )
 
-    records: list[dict] = []
-
-    for r in group_records:
-        records.extend(r)
+    records = [r for group in group_records for r in group]
 
     return pd.DataFrame.from_records(records)
 
