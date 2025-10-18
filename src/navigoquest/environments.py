@@ -28,7 +28,7 @@ from .paths import Path, PathDataset, smooth_path
 from .utils import glob_level_environments
 
 
-GroupKey = tuple[Any, ...]
+GroupKeyT = tuple[Any, ...]
 
 
 # class Environment(ABC):
@@ -236,9 +236,13 @@ class AggregateODMatrix:
         return self.mat / self.N
 
 
+class MinLevelEnvironment(ODMatrixMixin, LevelGridBase):
+    pass
+
+
 class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
-    _od_matrices: dict[GroupKey, AggregateODMatrix] | None = None
-    _mobility_fields: dict[GroupKey, dict[tuple[int, int], NDArray[np.int32]]] | None = None
+    _od_matrices: dict[GroupKeyT, AggregateODMatrix] | None = None
+    _mobility_fields: dict[GroupKeyT, dict[tuple[int, int], NDArray[np.int32]]] | None = None
 
     def __init__(self, level: int):
         super().__init__(level=level)
@@ -261,13 +265,13 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
             return pickle.load(f)
 
     @property
-    def od_matrices(self) -> dict[GroupKey, AggregateODMatrix]:
+    def od_matrices(self) -> dict[GroupKeyT, AggregateODMatrix]:
         if self._od_matrices is None:
             raise ValueError("od_matrices not  initialized; call set_od_matrices() first")
         return self._od_matrices
 
     @property
-    def mobility_fields(self) -> dict[GroupKey, dict[tuple[int, int], NDArray[np.int32]]]:
+    def mobility_fields(self) -> dict[GroupKeyT, dict[tuple[int, int], NDArray[np.int32]]]:
         if self._mobility_fields is None:
             raise ValueError("mobility_fields not initialized; call set_mobility_fields() first")
         return self._mobility_fields

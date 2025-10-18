@@ -9,9 +9,12 @@ from scipy import sparse as sp
 from tqdm import tqdm
 
 from .environments import (
+    AggregateODMatrix,
     BoundaryEnvironment,
     CohortEnvironment,
     GridLike,
+    GroupKeyT,
+    MinLevelEnvironment,
     SupportsBoundaryDistance,
     UserODMatrix,
 )
@@ -61,34 +64,64 @@ def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
     return float(np.sum(1 / (1 + np.exp(-ds_rescaled))) / length)
 
 
-def FrobeniusDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
-    key = mat.metadata["age"], mat.metadata["gender"]
-    reference_mat = env.od_matrices[key].norm_mat
-    mat_diff = reference_mat - mat.norm_mat
+def FrobeniusDeviationMetric(
+    mat: UserODMatrix,
+    env: CohortEnvironment | None = None,
+    reference_mat: AggregateODMatrix | None = None,
+) -> float:
+    if reference_mat is None:
+        if env is None:
+            raise ValueError("Must provide either env or reference_mat")
+        key = mat.metadata["age"], mat.metadata["gender"]
+        reference_mat = env.od_matrices[key]
+
+    mat_diff = reference_mat.norm_mat - mat.norm_mat
     return float(sp.linalg.norm(mat_diff, "fro"))
 
 
-def SupremumDeviationMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
-    key = mat.metadata["age"], mat.metadata["gender"]
-    reference_mat = env.od_matrices[key].norm_mat
-    mat_diff = reference_mat - mat.norm_mat
+def SupremumDeviationMetric(
+    mat: UserODMatrix,
+    env: CohortEnvironment | None = None,
+    reference_mat: AggregateODMatrix | None = None,
+) -> float:
+    if reference_mat is None:
+        if env is None:
+            raise ValueError("Must provide either env or reference_mat")
+        key = mat.metadata["age"], mat.metadata["gender"]
+        reference_mat = env.od_matrices[key]
+
+    mat_diff = reference_mat.norm_mat - mat.norm_mat
     return float(sp.linalg.norm((mat_diff), np.inf))
 
 
-def ConformityMetric(mat: UserODMatrix, env: CohortEnvironment) -> float:
-    key = mat.metadata["age"], mat.metadata["gender"]
-    reference_mat = env.od_matrices[key].norm_mat
+def ConformityMetric(
+    mat: UserODMatrix,
+    env: CohortEnvironment | None = None,
+    reference_mat: AggregateODMatrix | None = None,
+) -> float:
+    if reference_mat is None:
+        if env is None:
+            raise ValueError("Must provide either env or reference_mat")
+        key = mat.metadata["age"], mat.metadata["gender"]
+        reference_mat = env.od_matrices[key]
 
     r, s = mat.norm_mat.nonzero()
-    matching = reference_mat[r, s].sum() / len(r)
+    matching = reference_mat.norm_mat[r, s].sum() / len(r)
 
     # minus sign to reverse order
     return float(-matching)
 
 
-def VectorConformityMetric(path: Path, env: CohortEnvironment) -> float:
-    key = path.metadata["age"], path.metadata["gender"]
-    field = env.mobility_fields[key]
+def VectorConformityMetric(
+    path: Path,
+    env: CohortEnvironment | None = None,
+    reference_field: dict[GroupKeyT, NDArray[np.int32]] | None = None,
+) -> float:
+    if reference_field is None:
+        if env is None:
+            raise ValueError("Must provide either env or reference_field")
+        key = path.metadata["age"], path.metadata["gender"]
+        reference_field = env.mobility_fields[key]
 
     T = len(path.xy)  # proxy for duration
     out = 0.0
@@ -96,7 +129,7 @@ def VectorConformityMetric(path: Path, env: CohortEnvironment) -> float:
     diff = path.xy[1:] - path.xy[:-1]
 
     for k, el in enumerate(path.xy[:-1]):
-        Fi = field.get(tuple(el), np.zeros(2))
+        Fi = reference_field.get(tuple(el), np.zeros(2))
         out += np.dot(Fi, diff[k])
 
     # minus sign to reverse order
@@ -107,7 +140,7 @@ def compute_standard_metrics(
     dataset: PathDataset,
     cohort_env: CohortEnvironment,
     boundary_env: BoundaryEnvironment,
-) -> list[dict]:
+) -> pd.DataFrame:
     """Compute all the standard metrics for paths in the dataset.
 
     Parameters
@@ -146,27 +179,27 @@ def compute_standard_metrics(
 
 
 def _helper_standard_metrics_for_group(
-    args: tuple[list[Path], CohortEnvironment, BoundaryEnvironment],
+    args: tuple,
 ) -> list[dict]:
     """
     Helper function for a group of paths to process in parallel.
     """
-    paths_group, cohort_env, boundary_env = args
+    paths_group, level_env, boundary_env, reference_mat, reference_field = args
 
     records: list[dict] = []
     for path in paths_group:
-        mat = UserODMatrix.from_path(path, cohort_env)
+        mat = UserODMatrix.from_path(path, level_env)
         records.append(
             {
                 **path.metadata,
-                "voc": VisitingOrderMetric(path, cohort_env),
+                "voc": VisitingOrderMetric(path, level_env),
                 "path_length": PathLengthMetric(path),
                 "average_curvature": AverageCurvatureMetric(path),
                 "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
-                "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
-                "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
-                "conformity": ConformityMetric(mat, cohort_env),
-                "vector_conformity": VectorConformityMetric(path, cohort_env),
+                "frobenius_deviation": FrobeniusDeviationMetric(mat, reference_mat=reference_mat),
+                "supremum_deviation": SupremumDeviationMetric(mat, reference_mat=reference_mat),
+                "conformity": ConformityMetric(mat, reference_mat=reference_mat),
+                "vector_conformity": VectorConformityMetric(path, reference_field=reference_field),
             }
         )
 
@@ -177,8 +210,9 @@ def compute_standard_metrics_by_group(
     dataset: PathDataset,
     cohort_env: CohortEnvironment,
     boundary_env: BoundaryEnvironment,
+    level_env: MinLevelEnvironment,
     n_processes: int | None = None,
-) -> list[dict]:
+) -> pd.DataFrame:
     """Compute in parallel all the standard metrics for paths in the dataset.
 
     Parameters
@@ -202,18 +236,20 @@ def compute_standard_metrics_by_group(
         n_processes = os.cpu_count()
 
     # Group paths by age and prepare chunks for parallel processing
-    groups = []
+    group_args = []
 
-    for _, (_, paths_iterator) in dataset.group_by("age", "gender"):
+    for key, (_, paths_iterator) in dataset.group_by("age", "gender"):
         # Convert iterator to list to avoid serialization issues
         paths_list = list(paths_iterator)
-        groups.append((paths_list, cohort_env, boundary_env))
+        reference_mat = cohort_env.od_matrices[key]
+        reference_field = cohort_env.mobility_fields[key]
+        group_args.append((paths_list, level_env, boundary_env, reference_mat, reference_field))
 
     with Pool(processes=n_processes) as pool:
         group_records = list(
             tqdm(
-                pool.imap(_helper_standard_metrics_for_group, groups),
-                total=len(groups),
+                pool.imap(_helper_standard_metrics_for_group, group_args),
+                total=len(group_args),
             )
         )
 
