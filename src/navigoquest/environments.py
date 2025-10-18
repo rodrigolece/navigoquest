@@ -15,23 +15,20 @@ from numpy.typing import NDArray
 from scipy.spatial import distance_matrix
 from sklearn.neighbors import KDTree
 
+from .config import (
+    BOUNDARY_RADII,
+    DEFAULT_FLAG_RADIUS,
+    EXPECTED_VISITING_ORDERS,
+    LEVELS_REVERSE_FLAGS,
+    ODMATS_AGE_RANGE,
+    ODMATS_AGE_WINDOW_HALF_SIZE,
+    ODMATS_WEIGHT_STD,
+)
 from .paths import Path, PathDataset, smooth_path
 from .utils import glob_level_environments
 
 
-DEFAULT_FLAG_RADIUS = 3
-EXPECTED_VISITING_ORDERS = {
-    1: [0],
-    2: [0],
-    6: [0, 1, 2],
-    8: [0, 1, 2],
-    11: [1, 0, 1, 2],
-}
-LEVELS_REVERSE_FLAGS = [6, 8, 11]
-# NB: for levels 6, 8 and 11 I've tested the flags are in the reversed
-# order, but I don't know if this will always hold
-
-GroupKey = tuple[Any, ...]
+GroupKeyT = tuple[Any, ...]
 
 
 # class Environment(ABC):
@@ -239,9 +236,13 @@ class AggregateODMatrix:
         return self.mat / self.N
 
 
+class MinLevelEnvironment(ODMatrixMixin, LevelGridBase):
+    pass
+
+
 class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
-    _od_matrices: dict[GroupKey, AggregateODMatrix] | None = None
-    _mobility_fields: dict[GroupKey, dict[tuple[int, int], NDArray[np.int32]]] | None = None
+    _od_matrices: dict[GroupKeyT, AggregateODMatrix] | None = None
+    _mobility_fields: dict[GroupKeyT, dict[tuple[int, int], NDArray[np.int32]]] | None = None
 
     def __init__(self, level: int):
         super().__init__(level=level)
@@ -264,13 +265,13 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
             return pickle.load(f)
 
     @property
-    def od_matrices(self) -> dict[GroupKey, AggregateODMatrix]:
+    def od_matrices(self) -> dict[GroupKeyT, AggregateODMatrix]:
         if self._od_matrices is None:
             raise ValueError("od_matrices not  initialized; call set_od_matrices() first")
         return self._od_matrices
 
     @property
-    def mobility_fields(self) -> dict[GroupKey, dict[tuple[int, int], NDArray[np.int32]]]:
+    def mobility_fields(self) -> dict[GroupKeyT, dict[tuple[int, int], NDArray[np.int32]]]:
         if self._mobility_fields is None:
             raise ValueError("mobility_fields not initialized; call set_mobility_fields() first")
         return self._mobility_fields
@@ -286,7 +287,9 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
 
         return None
 
-    def transform_od_matrices_to_windowed(self, half_window: int = 5, scale: float = 2.0) -> None:
+    def transform_od_matrices_to_windowed(
+        self, half_window: int = ODMATS_AGE_WINDOW_HALF_SIZE, scale: float = ODMATS_WEIGHT_STD
+    ) -> None:
         if self._od_matrices is None:
             raise ValueError("call `set_od_matrices` first")
 
@@ -303,8 +306,7 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
 
         for key, agg in self._od_matrices.items():
             age = key[0]  # TODO: only true if age is the first attribute, need to generalize
-            if age < 24 or age > 80:
-                # NB: we have filtered ages outside the range [19, 99] so the window cannot be smaller than 24
+            if age < ODMATS_AGE_RANGE[0] or age > ODMATS_AGE_RANGE[1]:
                 continue
 
             age_window = range(age - half_window, age + half_window + 1)
@@ -337,13 +339,21 @@ class BoundaryEnvironment:
     rout: float
     scale: float
 
-    def __init__(self, level: int, rin: float, rout: float, scale: float) -> None:
+    def __init__(
+        self, level: int, rin: float | None = None, rout: float | None = None, scale: float = 4.0
+    ) -> None:
         p = pathlib.Path(__file__).parent / f"data/levels/level{level:02}_inner_bdry.npy"
         if not p.exists():
             raise FileNotFoundError(f"{p} does not exist")
 
         inner_bdry = smooth_path(np.load(p))
         self.inner_bdry_kdtree = KDTree(inner_bdry)
+
+        if rin is None:
+            rin = BOUNDARY_RADII[level]["rin"]
+        if rout is None:
+            rout = BOUNDARY_RADII[level]["rout"]
+
         self.rin = rin
         self.rout = rout
         self.scale = scale
