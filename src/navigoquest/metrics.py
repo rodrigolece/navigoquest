@@ -44,6 +44,8 @@ def AverageCurvatureMetric(path: Path) -> float:
     diff = path.smooth_xy[1:] - path.smooth_xy[:-1]
     displacements = np.linalg.norm(diff, axis=1)
     length = displacements.sum()
+    if length == 0:
+        return 0
 
     # Remove stationary points
     idx = displacements > 0
@@ -58,6 +60,8 @@ def AverageCurvatureMetric(path: Path) -> float:
 
 def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
     length = PathLengthMetric(path.smooth_xy)
+    if length == 0:
+        return 0
     ds = env.distances_to_boundary(path)
     ds_rescaled = -2 * env.scale * (ds - (env.rout + env.rin) / 2) / (env.rout - env.rin)
     # NB: ds_rescaled is negative. This is in the original code but might be a mistake
@@ -288,8 +292,8 @@ dict_metric_argname = {
     "path_length": ("path",),
     "average_curvature": ("path",),
     "boundary_affinity": ("path", "env_boundary"),
-    "frobenius_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
-    "supremum_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
+    "frobenius_deviation": ("odmat", "env_cohort"),
+    "supremum_deviation": ("odmat", "env_cohort"),
     "conformity": ("odmat", "env_cohort"),
     "vector_conformity": ("path", "env_cohort"),
 }
