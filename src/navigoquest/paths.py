@@ -31,15 +31,8 @@ class Path:
     @property
     def smooth_xy(self) -> NDArray[np.float64]:
         if self._smooth_xy is None:
-            # self._smooth_xy = self._initialize_smooth_xy()
             self._smooth_xy = smooth_path(self.xy)
         return self._smooth_xy
-
-    # def _initialize_smooth_xy(self) -> NDArray[np.float64]:
-    #     N = len(self.xy)
-    #     xs = np.arange(1 + (N - 1) * spline_res) / spline_res
-    #     interpolation = np.vstack([np.interp(xs, range(N), pt) for pt in self.xy.T]).T
-    #     return gaussian_filter1d(interpolation, spline_res * bandwidth, axis=0)
 
 
 class PathDataset:
