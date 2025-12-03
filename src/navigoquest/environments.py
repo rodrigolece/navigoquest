@@ -117,7 +117,7 @@ class LevelGridBase(ABC):
 
     def visiting_order_correctness(self, path: Path) -> bool:
         vo = self.visiting_order(path)
-        return vo == EXPECTED_VISITING_ORDERS[self.level]
+        return vo in EXPECTED_VISITING_ORDERS[self.level]
 
 
 class ODMatrixMixin:
@@ -288,7 +288,8 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
         return None
 
     def transform_od_matrices_to_windowed(
-        self, half_window: int = ODMATS_AGE_WINDOW_HALF_SIZE, scale: float = ODMATS_WEIGHT_STD
+        self, half_window: int = ODMATS_AGE_WINDOW_HALF_SIZE, scale: float = ODMATS_WEIGHT_STD,
+        ignore_spill = False
     ) -> None:
         if self._od_matrices is None:
             raise ValueError("call `set_od_matrices` first")
@@ -313,6 +314,12 @@ class CohortEnvironment(ODMatrixMixin, MobilityFieldMixin, LevelGridBase):
             mat = sp.csr_matrix(agg.mat.shape)
 
             for i, a in enumerate(age_window):
+                # Check if key is in the OD matrix entries
+                entry_check = (a, key[1]) in self._od_matrices.keys()
+                # Ignore this iteration if entry isn't there, and ignore_spill == True.
+                if ignore_spill and not entry_check:
+                    continue
+                # Otherwise continue as normal
                 mat += weights[i] * self._od_matrices[(a, key[1])].norm_mat
 
             new_matrices[key] = AggregateODMatrix(mat, 1)

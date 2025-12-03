@@ -4,11 +4,11 @@ LEVELS: list[int] = [1, 2, 6, 8, 11]
 
 DEFAULT_FLAG_RADIUS: int = 3
 EXPECTED_VISITING_ORDERS: dict[int, list[int]] = {
-    1: [0],
-    2: [0],
-    6: [0, 1, 2],
-    8: [0, 1, 2],
-    11: [1, 0, 1, 2],
+    1: [[0]],
+    2: [[0]],
+    6: [[0, 1, 2]],
+    8: [[0, 1, 2], [0, 1, 0, 2]],
+    11: [[0, 1, 2], [1, 0, 1, 2]],
 }
 LEVELS_REVERSE_FLAGS: list[int] = [6, 8, 11]
 # NB: for levels 6, 8 and 11 I've tested the flags are in the reversed

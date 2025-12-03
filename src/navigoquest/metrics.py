@@ -44,6 +44,8 @@ def AverageCurvatureMetric(path: Path) -> float:
     diff = path.smooth_xy[1:] - path.smooth_xy[:-1]
     displacements = np.linalg.norm(diff, axis=1)
     length = displacements.sum()
+    if length == 0:
+        return 0
 
     # Remove stationary points
     idx = displacements > 0
@@ -60,6 +62,8 @@ def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
     length = PathLengthMetric(path.smooth_xy)
     ds = env.distances_to_boundary(path)
     ds_rescaled = -2 * env.scale * (ds - (env.rout + env.rin) / 2) / (env.rout - env.rin)
+    if length == 0:
+        return 0
     # NB: ds_rescaled is negative. This is in the original code but might be a mistake
     # sigmoid: f(x) = 1 / (1 + exp(-x))
     return float(np.sum(1 / (1 + np.exp(-ds_rescaled))) / length)
@@ -288,12 +292,11 @@ dict_metric_argname = {
     "path_length": ("path",),
     "average_curvature": ("path",),
     "boundary_affinity": ("path", "env_boundary"),
-    "frobenius_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
-    "supremum_deviation": ("odmat", "env_cohort", "use_sparse_norm"),
+    "frobenius_deviation": ("odmat", "env_cohort"),
+    "supremum_deviation": ("odmat", "env_cohort"),
     "conformity": ("odmat", "env_cohort"),
     "vector_conformity": ("path", "env_cohort"),
 }
-
 
 def format_metric_task_data(task_list):
     functions = [dict_metric_function[task] for task in task_list]
