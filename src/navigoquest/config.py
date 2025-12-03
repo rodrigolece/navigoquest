@@ -8,10 +8,13 @@ EXPECTED_VISITING_ORDERS: dict[int, list[int] | list[list[int]]] = {
     2: [0],
     6: [0, 1, 2],
     8: [
-        [0, 1, 2],
-        [0, 1, 0, 2],
+        [0, 1, 2],  # default order
+        [0, 1, 0, 2],  # additional order
     ],
-    11: [1, 0, 1, 2],
+    11: [
+        [1, 0, 1, 2],  # default order
+        [0, 1, 2],  # additional order
+    ],
 }
 LEVELS_REVERSE_FLAGS: list[int] = [6, 8, 11]
 # NB: for levels 6, 8 and 11 I've tested the flags are in the reversed
