@@ -3,11 +3,14 @@
 LEVELS: list[int] = [1, 2, 6, 8, 11]
 
 DEFAULT_FLAG_RADIUS: int = 3
-EXPECTED_VISITING_ORDERS: dict[int, list[int]] = {
+EXPECTED_VISITING_ORDERS: dict[int, list[int] | list[list[int]]] = {
     1: [0],
     2: [0],
     6: [0, 1, 2],
-    8: [0, 1, 2],
+    8: [
+        [0, 1, 2],
+        [0, 1, 0, 2],
+    ],
     11: [1, 0, 1, 2],
 }
 LEVELS_REVERSE_FLAGS: list[int] = [6, 8, 11]

@@ -117,7 +117,13 @@ class LevelGridBase(ABC):
 
     def visiting_order_correctness(self, path: Path) -> bool:
         vo = self.visiting_order(path)
-        return vo == EXPECTED_VISITING_ORDERS[self.level]
+        expected = EXPECTED_VISITING_ORDERS[self.level]
+
+        # we allow the expected visiting order to be a nested list to allow for multiple orders
+        if isinstance(expected[0], list):
+            return vo in expected
+
+        return vo == expected
 
 
 class ODMatrixMixin:
