@@ -60,7 +60,7 @@ class SupportsBoundaryDistance(Protocol):
     rout: float
     scale: float
 
-    def distances_to_boundary(self, path: Path) -> float: ...
+    def distances_to_boundary(self, path: Path, use_smooth: bool = True) -> float: ...
 
 
 # --- Independent functionality that depends on the grid ------------------------
@@ -386,8 +386,9 @@ class BoundaryEnvironment:
         with open(filename, "rb") as f:
             return pickle.load(f)
 
-    def distances_to_boundary(self, path: Path) -> float:
-        ds, _ = self.inner_bdry_kdtree.query(path.smooth_xy, k=1)  # second out arg is indices
+    def distances_to_boundary(self, path: Path, use_smooth: bool = True) -> float:
+        xy = path.smooth_xy if use_smooth else path.xy
+        ds, _ = self.inner_bdry_kdtree.query(xy, k=1)  # second out arg is indices
         return ds.flatten()  # KDTree returns a column vector
 
 

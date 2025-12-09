@@ -40,8 +40,9 @@ def PathLengthMetric(path: Path | NDArray) -> float:
     return float(displacements.sum())
 
 
-def AverageCurvatureMetric(path: Path) -> float:
-    diff = path.smooth_xy[1:] - path.smooth_xy[:-1]
+def AverageCurvatureMetric(path: Path, use_smooth: bool = True) -> float:
+    xy = path.smooth_xy if use_smooth else path.xy
+    diff = xy[1:] - xy[:-1]
     displacements = np.linalg.norm(diff, axis=1)
     length = displacements.sum()
     if length == 0:
@@ -58,11 +59,14 @@ def AverageCurvatureMetric(path: Path) -> float:
     return float(np.sum(curv) / length)
 
 
-def BoundaryAffinityMetric(path: Path, env: SupportsBoundaryDistance) -> float:
-    length = PathLengthMetric(path.smooth_xy)
+def BoundaryAffinityMetric(
+    path: Path, env: SupportsBoundaryDistance, use_smooth: bool = True
+) -> float:
+    xy = path.smooth_xy if use_smooth else path.xy
+    length = PathLengthMetric(xy)
     if length == 0:
         return 0
-    ds = env.distances_to_boundary(path)
+    ds = env.distances_to_boundary(path, use_smooth=use_smooth)
     ds_rescaled = -2 * env.scale * (ds - (env.rout + env.rin) / 2) / (env.rout - env.rin)
     # NB: ds_rescaled is negative. This is in the original code but might be a mistake
     # sigmoid: f(x) = 1 / (1 + exp(-x))
@@ -145,6 +149,7 @@ def compute_standard_metrics(
     dataset: PathDataset,
     cohort_env: CohortEnvironment,
     boundary_env: BoundaryEnvironment,
+    use_smooth: bool = True,
 ) -> pd.DataFrame:
     """Compute all the standard metrics for paths in the dataset.
 
@@ -156,6 +161,9 @@ def compute_standard_metrics(
         The cohort environment for reference data
     boundary_env : BoundaryEnvironment
         The boundary environment for boundary-related metrics
+    use_smooth : bool, optional
+        Whether to use the smooth path for the curvature and boundary affinity metrics (default
+        is True).
 
     Returns
     -------
@@ -171,8 +179,10 @@ def compute_standard_metrics(
                 **path.metadata,
                 "voc": VisitingOrderMetric(path, cohort_env),
                 "path_length": PathLengthMetric(path),
-                "average_curvature": AverageCurvatureMetric(path),
-                "boundary_affinity": BoundaryAffinityMetric(path, boundary_env),
+                "average_curvature": AverageCurvatureMetric(path, use_smooth=use_smooth),
+                "boundary_affinity": BoundaryAffinityMetric(
+                    path, boundary_env, use_smooth=use_smooth
+                ),
                 "frobenius_deviation": FrobeniusDeviationMetric(mat, cohort_env),
                 "supremum_deviation": SupremumDeviationMetric(mat, cohort_env),
                 "conformity": ConformityMetric(mat, cohort_env),
@@ -202,7 +212,7 @@ def _helper_standard_metrics_for_group(args: tuple) -> list[dict]:
     environments initialized by _init_metrics_worker.
 
     """
-    paths_group, reference_mat, reference_field = args
+    paths_group, reference_mat, reference_field, use_smooth = args
 
     records: list[dict] = []
 
@@ -213,8 +223,10 @@ def _helper_standard_metrics_for_group(args: tuple) -> list[dict]:
                 **path.metadata,
                 "voc": VisitingOrderMetric(path, _worker_level_env),
                 "path_length": PathLengthMetric(path),
-                "average_curvature": AverageCurvatureMetric(path),
-                "boundary_affinity": BoundaryAffinityMetric(path, _worker_boundary_env),
+                "average_curvature": AverageCurvatureMetric(path, use_smooth=use_smooth),
+                "boundary_affinity": BoundaryAffinityMetric(
+                    path, _worker_boundary_env, use_smooth=use_smooth
+                ),
                 "frobenius_deviation": FrobeniusDeviationMetric(mat, reference_mat=reference_mat),
                 "supremum_deviation": SupremumDeviationMetric(mat, reference_mat=reference_mat),
                 "conformity": ConformityMetric(mat, reference_mat=reference_mat),
@@ -229,6 +241,7 @@ def compute_standard_metrics_by_group(
     dataset: PathDataset,
     cohort_env: CohortEnvironment,
     n_processes: int | None = None,
+    use_smooth: bool = True,
 ) -> pd.DataFrame:
     """Compute in parallel all the standard metrics for paths in the dataset.
 
@@ -241,6 +254,9 @@ def compute_standard_metrics_by_group(
     n_processes : int | None, optional
         Number of processes to use for parallel computation.
         If None, uses os.cpu_count()
+    use_smooth : bool, optional
+        Whether to use the smooth path for the curvature and boundary affinity metrics (default
+        is True).
 
     Returns
     -------
@@ -256,7 +272,7 @@ def compute_standard_metrics_by_group(
         paths_list = list(paths_iterator)  # list to avoid serialization issues
         reference_mat = cohort_env.od_matrices[key]
         reference_field = cohort_env.mobility_fields[key]
-        group_args.append((paths_list, reference_mat, reference_field))
+        group_args.append((paths_list, reference_mat, reference_field, use_smooth))
 
     # calling Pool with initializer to set up environments once per worker
     with Pool(
