@@ -1,9 +1,11 @@
 [project]
 name = "navigoquest"
-version = "0.1.0"
+version = "1.0.0"
 authors = [
     { name = "rodrigolece", email = "rodrigolealc@ciencias.unam.mx" }
 ]
+description = "Path and navigation analysis for SeaHeroQuest"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.3.2",
@@ -30,7 +32,7 @@ packages = ["src/navigoquest"]
 
 [tool.ruff]
 line-length = 100
-target-version = 'py310'
+target-version = 'py312'
 
 [tool.ruff.lint]
 extend-select = ["I"]
