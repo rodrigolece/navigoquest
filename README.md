@@ -1,6 +1,6 @@
 # navigoquest
 
-Path and navigation analysis for the [SeaHeroQuest](https://seaheroquest.com/) dataset.
+Path and navigation analysis for the [SeaHeroQuest](https://seaheroquest.com/) dataset. This is the open source library that supports the analysis done in [this repos](https://github.com/rodrigolece/dementia-paper/) for the paper "Navigation geometry profiles Alzheimer’s disease and its genetic risk", by Uzu Lim, Rodrigo Leal-Cervantes et al. We will add a link to the paper after publication.
 
 ## Installation
 
