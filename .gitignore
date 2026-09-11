@@ -8,3 +8,18 @@ wheels/
 
 # Virtual environments
 .venv
+
+# R files
+/notebooks/.Rapp.history
+
+# Jupyter
+**/.ipynb_checkpoints
+
+# Analysis data and outputs (not distributed)
+# NB: leading slash anchors these to the repo root, so they do NOT match
+# src/navigoquest/data/ (the packaged level files).
+/data/
+/figures/
+
+# macOS
+.DS_Store
