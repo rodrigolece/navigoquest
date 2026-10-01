@@ -1,0 +1,67 @@
+# Figure output settings shared by all notebooks.
+# Read by navigoquest.utils.figures.save_figure every time a figure is saved,
+# so changes apply without restarting the kernel.
+
+[output]
+enabled = true            # false: notebooks only display figures, nothing is written
+dir = "../figures"        # relative to this file (i.e. the repository's figures/ folder)
+formats = ["pdf", "svg"]  # every figure is written once per format; add "png" for previews
+bbox_inches = "tight"     # crop to the drawn content, as in the notebook display; "" for the full canvas
+dpi = 300                 # only affects rasterised elements inside the vector files
+transparent = false
+
+[source_data]
+enabled = true            # write figures/source_data/<name>.xlsx (one tab per panel) for each figure
+auto_extract = true       # extract drawn data for panels without explicitly attached tables
+workbook = "SourceData.xlsx"  # combined file built by 11_source_data.ipynb (in the output dir)
+
+# Output file names. The left-hand side is the key used in the notebook
+# (save_figure(fig, "<key>")); the right-hand side is the name of the written files
+# and of the sheet in SourceData.xlsx. Figures not listed here keep their key as name.
+# Fill in the supplementary figure numbers as needed.
+[names]
+# 4_extremes.ipynb
+overview = "Fig1"
+# extremes_level06 = ""
+# extremes_level08 = ""
+# extremes_level11 = ""
+# metric_correlations = ""
+# mobility_field_level06 = ""
+# mobility_field_level08 = ""
+# mobility_field_level11 = ""
+
+# 2_roc.ipynb
+voc_roc = ""
+clinical_radar_auc = ""
+# clinical_roc = ""
+
+# 5_clusters.ipynb
+# clusters_k12_level06 = ""   (also k4, k8, k16 and levels 08, 11)
+# cluster_embeddings = ""
+# cluster_colour_key = ""
+# cluster_stability_level06 = ""   (also levels 08, 11)
+
+# 6_boxplots.ipynb
+# clinical_boxplots = ""
+
+# 7_t_test.ipynb
+# variance_ratio = ""
+
+# 8_partial_paths.ipynb
+# duration_distribution = ""
+# length_distribution = ""
+# path_quantiles = ""
+# partial_path_auc = ""
+# partial_path_examples = ""
+
+# 10_partial_paths_delong.ipynb
+# partial_path_delong = ""
+
+# Statistical tests, reported as the journal asks:
+#   Statistic (df) = value, p = value, effect size = value, 95% CI = [low, high]
+# Written by navigoquest.utils.stat_report.save_tests: <dir>/<name>.csv (all numbers)
+# and <dir>/<name>.txt (one formatted sentence per test).
+[statistical_tests]
+enabled = true
+dir = "../statistical_tests"   # relative to this file (i.e. the repository's statistical_tests/ folder)
+ci_level = 0.95

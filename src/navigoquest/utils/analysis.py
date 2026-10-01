@@ -4,6 +4,7 @@ import scipy.stats as st
 from sklearn import metrics
 
 from .config import PLOT_CONFIG
+from .stat_report import auc_test, tests_frame, welch_ttest
 from .. import (
     compute_pvalues,
     compute_auc,
@@ -100,6 +101,44 @@ def pvalues(metrics_dir, feat_types, norm=False):
     return pd.concat(out).set_index(["level", "metric"])
 
 
+def voc_tests(metrics_dir, feat_types, norm=False, levels=(6, 8, 11)):
+    """Statistical tests of incorrect vs. correct visiting order (players aged 50+).
+
+    For each level and metric: Welch's t-test (the p-values of ``pvalues``) and the AUC
+    against chance (the AUCs and CIs of ``aucs``), with degrees of freedom, effect sizes
+    and confidence intervals. Returns a table for ``stat_report.save_tests``.
+    """
+    rows = []
+
+    for lvl in levels:
+        df = load_level_data(metrics_dir, lvl, norm)
+        df = df.loc[df.age >= 50].copy()
+        incorrect = ~df["voc"].astype(bool)
+
+        for feat in feat_types:
+            labels = {"normalised": norm, "level": lvl, "metric": feat}
+            rows.append(
+                welch_ttest(
+                    df.loc[incorrect, feat],
+                    df.loc[~incorrect, feat],
+                    group1="incorrect VOC",
+                    group2="correct VOC",
+                    **labels,
+                )
+            )
+            rows.append(
+                auc_test(
+                    incorrect.astype(int),
+                    df[feat],
+                    positive="incorrect VOC",
+                    negative="correct VOC",
+                    **labels,
+                )
+            )
+
+    return tests_frame(rows)
+
+
 def _fill_group(group_df, feat_types, ref_lvl=None):
     gby = group_df.groupby("level")
     keys = list(gby.groups.keys())
@@ -189,3 +228,36 @@ def clinical_aucs(df, other, ref="e3e3", feat_types=feat_types, levels=(6, 8, 11
         out.append(auc)
 
     return pd.concat(out).set_index(["level", "metric"])
+
+
+def clinical_auc_tests(df, other, ref="e3e3", feat_types=feat_types, levels=(6, 8, 11), **labels):
+    """AUC of ``other`` vs. ``ref`` against chance, per level and metric.
+
+    Same data and AUCs as ``clinical_aucs``, with the z statistic, p-value and CI.
+    Extra keyword arguments are added as labels. Returns a table for
+    ``stat_report.save_tests``.
+    """
+    groups = df.loc[df.group.isin([ref, other])].copy()
+    groups["label"] = (groups["group"] == other).astype(int)
+
+    gby = groups.groupby("level")
+
+    rows = []
+
+    for lvl in levels:
+        lvl_df = gby.get_group(lvl).dropna(subset=feat_types)
+
+        for feat in feat_types:
+            rows.append(
+                auc_test(
+                    lvl_df["label"],
+                    lvl_df[feat],
+                    positive=other,
+                    negative=ref,
+                    **labels,
+                    level=lvl,
+                    metric=feat,
+                )
+            )
+
+    return tests_frame(rows)

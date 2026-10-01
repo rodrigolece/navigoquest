@@ -38,7 +38,7 @@ def normalize_level_results(
         pd.read_csv(metrics_dir / "metrics_level01_gb_2480.csv").set_index(id_col).reindex(ref_ids)
     )
     two = (
-        pd.read_csv(metrics_dir / "metrics_level01_gb_2480.csv").set_index(id_col).reindex(ref_ids)
+        pd.read_csv(metrics_dir / "metrics_level02_gb_2480.csv").set_index(id_col).reindex(ref_ids)
     )
 
     norm_factor = (one["path_length"] + two["path_length"]).abs()

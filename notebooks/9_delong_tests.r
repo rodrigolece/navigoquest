@@ -77,6 +77,25 @@ for (lvl in levels) {
 output_name <- sprintf("%s/delong_results.csv", file_dir)
 write.csv(output, output_name, row.names=FALSE)
 
+# Also export the results as source data, next to the figures.
+# The figures folder is read from plot_config.toml (key `dir`, relative to the
+# notebooks folder); the repository root is three levels above file_dir.
+repo_dir    <- dirname(dirname(dirname(file_dir)))
+config_file <- file.path(repo_dir, "notebooks", "plot_config.toml")
+figures_dir <- "../figures"
+if (file.exists(config_file)) {
+    dir_line <- grep("^\\s*dir\\s*=", readLines(config_file), value = TRUE)
+    if (length(dir_line) > 0) {
+        figures_dir <- sub('^\\s*dir\\s*=\\s*"([^"]*)".*$', "\\1", dir_line[1])
+    }
+}
+if (!grepl("^(/|~|[A-Za-z]:)", figures_dir)) {
+    figures_dir <- file.path(repo_dir, "notebooks", figures_dir)
+}
+source_data_dir <- file.path(figures_dir, "source_data")
+dir.create(source_data_dir, recursive = TRUE, showWarnings = FALSE)
+write.csv(output, file.path(source_data_dir, "delong_results.csv"), row.names=FALSE)
+
 print('Done.')
 
 

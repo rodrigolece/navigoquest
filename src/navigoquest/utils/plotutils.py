@@ -9,8 +9,10 @@ from matplotlib.patches import Circle
 from matplotlib.projections import register_projection
 from matplotlib.projections.polar import PolarAxes
 import numpy as np
+import pandas as pd
 
 from .config import PLOT_CONFIG
+from .figures import attach_source_data
 
 title = PLOT_CONFIG["title"]
 feat_types = PLOT_CONFIG["feat_types"]
@@ -242,6 +244,17 @@ def plot_quartiles_by_vo(
     art1 = plot_quartiles(ax, correct, col)
     art2 = plot_quartiles(ax, incorrect, col)
 
+    # Source data: the plotted median and interquartile range per age
+    tables = []
+    for group, sub in (("Correct", correct), ("Incorrect", incorrect)):
+        stats = sub.groupby("age")[col].describe()[["count", "25%", "50%", "75%"]]
+        stats.columns = ["n", "q25", "median", "q75"]
+        stats.insert(0, "visiting_order", group)
+        tables.append(stats.reset_index())
+    table = pd.concat(tables, ignore_index=True)
+    table.insert(0, "metric", col)
+    attach_source_data(ax, table)
+
     if legend:
         handles = [art1, art2]
         labels = ["Correct", "Incorrect"]
@@ -258,10 +271,16 @@ def plot_roc_curves(
     verbose=False,
 ):
 
+    tables = []
     for lvl in levels:
         # xy = roc_xy[lvl][col]
         xy = roc_xy[(lvl, col)]
         ax.plot(*xy, label=f"Level {lvl}", lw=2.5)
+        fpr, tpr = xy
+        tables.append(pd.DataFrame({"metric": col, "level": lvl, "fpr": fpr, "tpr": tpr}))
+
+    # Source data: the plotted ROC curves
+    attach_source_data(ax, pd.concat(tables, ignore_index=True))
 
     ax.set_xlim((-0.1, 1.1))
     ax.set_ylim((-0.1, 1.1))
@@ -287,6 +306,9 @@ def plot_auc_bars(
     legend=True,
     leg_offset=0.5,
 ):
+    # Source data: AUC values and confidence intervals of the plotted bars
+    attach_source_data(ax, df.loc[df.level.isin(levels)].reset_index(drop=True))
+
     x = np.arange(len(feat_types))  # the label locations
     width = 0.25  # the width of the bars
     multiplier = 0
@@ -400,6 +422,9 @@ def radar(
     labels=None,
     legend=False,
 ):
+    # Source data: the plotted values per group (rows) and metric (columns)
+    attach_source_data(ax, data.loc[groups])
+
     for gp, c in zip(groups, colors):
         ax.plot(theta, data.loc[gp], color=c, lw=lw)
         ax.fill(theta, data.loc[gp], color=c, alpha=alpha, label=gp)
